@@ -153,6 +153,49 @@ def plot_tfm(tfm, y=0., func_res=None, ax=None, title='TFM', clim=None, interpol
                     interpolation=interpolation, draw_cbar=draw_cbar, cmap=cmap)
 
 
+def plot_tfm_generic(grid,tfm_output, y=0., func_res=None, ax=None, title='TFM', clim=None, interpolation='bilinear', draw_cbar=True,
+             cmap=None):
+    """
+    Plot a TFM in plane Oxz.
+
+    Parameters
+    ----------
+    tfm : BaseTFM
+    y : float
+    ax
+    clim
+    interpolation : str
+        Cf matplotlib.pyplot.imshow
+    draw_cbar : boolean, optional
+        Default: True
+    func_res : function
+        Function to apply on tfm.res before plotting it. Example: ``lambda x: np.abs(x)``
+
+
+    Returns
+    -------
+    ax
+    image
+
+    """
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.figure
+
+    iy = np.argmin(np.abs(grid.y - y))
+
+    if tfm_output is None:
+        raise ValueError('No result in this TFM object.')
+    if func_res is None:
+        func_res = lambda x: x
+
+    data = func_res(tfm_output[:, iy, :])
+
+    return plot_oxz(data, grid=grid, ax=ax, title=title, clim=clim,
+                    interpolation=interpolation, draw_cbar=draw_cbar, cmap=cmap)
+
+
 def plot_directivity_finite_width_2d(element_width, wavelength, ax=None, **kwargs):
     """
 
