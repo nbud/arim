@@ -852,7 +852,7 @@ def distance_pairwise(points1, points2, out=None, dtype=None, block_size=None, n
     if out is None:
         if dtype is None:
             # Infer dtype:
-            dtype = np.result_type(points1.dtype, points2.dtype)
+            dtype = s.FLOAT #np.result_type(points1.dtype, points2.dtype)
         distance = np.full((num1, num2), 0, dtype=dtype)
     else:
         distance = out

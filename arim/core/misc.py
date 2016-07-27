@@ -116,7 +116,7 @@ class Time:
             raise ValueError("'step' must be positive.")
         samples = linspace2(start, step, num, dtype)
         self._samples = samples
-        self._step = step
+        self._step = step #.astype(s.FLOAT)
         
     @property
     def samples(self):
@@ -165,13 +165,13 @@ class Time:
         (num,) = get_shape_safely(timevect, 'timevect', (None,))
 
         start = timevect[0]
-        steps = np.diff(timevect)
-        avg_step = np.mean(steps)
+        steps = np.diff(timevect).astype(s.FLOAT)
+        avg_step = np.mean(steps).astype(s.FLOAT)
 
         if not np.allclose(steps, avg_step, atol=0, rtol=rtol):
             raise ValueError("The vector seems not linearly spaced.")
 
-        return cls(start, avg_step, num)
+        return cls(start, avg_step, num,dtype=s.FLOAT)
         
     def window(self, tmin=None, tmax=None, endpoint_left=True, endpoint_right=True):
         """
