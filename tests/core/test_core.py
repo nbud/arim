@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-
+import math
 from arim import CaptureMethod
 from arim import core as c
 from arim import utils
@@ -87,13 +87,13 @@ def test_time_from_vect():
     timevect = _timevect.copy()
 
     time = c.Time.from_vect(timevect)
-    assert len(time) == num
-    assert time.start == start
-    assert time.end == end
-    assert time.samples[0] == start
-    assert time.samples[-1] == end
-    assert np.mean(np.diff(time.samples)) == step
-    assert np.allclose(np.diff(time.samples), step, atol=0)
+    assert math.isclose(len(time),num)
+    assert math.isclose(time.start,start,rel_tol=1e-9,abs_tol=1e-10)
+    assert math.isclose(time.end,end,rel_tol=1e-9,abs_tol=1e-10)
+    assert math.isclose(time.samples[0],start,rel_tol=1e-9,abs_tol=1e-10)
+    assert math.isclose(time.samples[-1],end,rel_tol=1e-9,abs_tol=1e-10)
+    assert math.isclose(np.mean(np.diff(time.samples)),step,rel_tol=1e-9,abs_tol=1e-10)
+    assert np.allclose(np.diff(time.samples), step,atol=1e-10)
 
     # =========================================================================
     # With Nan
