@@ -6,7 +6,6 @@ import arim.geometry as g
 from arim import Probe, InfiniteMedium, Material, Time, Frame, FocalLaw
 from arim import im
 
-
 def make_delay_and_sum_case1():
     """
     2 elements (x=0, y=0, z=0) and (x=1, y=0, z=0)
@@ -50,10 +49,10 @@ def make_delay_and_sum_case1():
 
     lookup_times_tx = (times_of_flights[tx == rx] / 2).reshape((1, 2))
     lookup_times_rx = lookup_times_tx.copy()
-    scanline_weights = np.array([1.0, 2.0, 1.0])  # HMC
+    
     amplitudes_tx = np.array([[1.0, 1.0]])
     amplitudes_rx = np.array([[1.0, 1.0]])
-    focal_law = FocalLaw(lookup_times_tx, lookup_times_rx, amplitudes_tx, amplitudes_rx, scanline_weights)
+    focal_law = FocalLaw(lookup_times_tx, lookup_times_rx, amplitudes_tx, amplitudes_rx)
 
     frame = Frame(scanlines, time, tx, rx, probe, examination_object)
 
@@ -62,9 +61,15 @@ def make_delay_and_sum_case1():
 
 def test_delay_and_sum():
     frame, focal_law = make_delay_and_sum_case1()
-
-    res = im.delay_and_sum(frame, focal_law)
-    assert res == 20.0
+    weights = np.array([1.0, 2.0, 1.0])  # HMC
+    scanlines_weighted=np.empty_like(frame.scanlines)
+    numscanlines,numsamples=frame.scanlines.shape
+    for scan in range(numscanlines):
+        for sample in range(numsamples):
+            scanlines_weighted[scan,sample]=frame.scanlines[scan,sample]*weights[scan]
+            
+    res = im.delay_and_sum(scanlines_weighted,frame, focal_law)
+    assert math.isclose(res,20.0,abs_tol=1e-10,rel_tol=1e-10)
 
 
 def test_find_minimum_times():
