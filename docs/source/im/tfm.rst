@@ -8,7 +8,7 @@ Original paper on TFM: [Holmes2005]_
 
 Related module: :mod:`arim.im.tfm`
 
-To compute TFM, instantiate a :class:`ContactTFM` or :class:`MultiviewTFM` object.
+To compute TFM, instantiate a :class:`ContactTFM` or :class:`SingleViewTFM` object.
 
 In arim the following general definition of TFM  is used [Budyn_engd1]_:
 
@@ -28,7 +28,9 @@ Where:
   - :math:`\tau_{\cdot,\mathit{rx}}` is returned by :meth:`BaseTFM.get_lookup_times_tx`.
   - :math:`\tau_{\cdot,\mathit{rx}}` is returned by :meth:`BaseTFM.get_lookup_times_rx`.
 
-Lookup times for multiview TFM are computed with :mod:`arim.im.fermat_solver`.
+Lookup times for each view TFM are computed with :mod:`arim.im.fermat_solver` as specified
+in a list of required views. Each SingleViewTFM can be collected within a BaseMultiTFMViews class instance
+for shared properties (between SingleViewTFM) within each collection instance. 
 
 The module :mod:`arim.im.amplitudes` contains several classes for computing amplitudes.
 

@@ -15,7 +15,7 @@ from ..utils import chunk_array
 __all__ = ['delay_and_sum', 'find_minimum_times']
 
 
-def delay_and_sum(frame, focal_law, fillvalue=np.nan, result=None, block_size=None, numthreads=None,interpolate_position=0):
+def delay_and_sum(scanlines_weighted,frame, focal_law, fillvalue=np.nan, result=None, block_size=None, numthreads=None,interpolate_position='nearest'):
     """
     Chunk the grid.
 
@@ -33,7 +33,7 @@ def delay_and_sum(frame, focal_law, fillvalue=np.nan, result=None, block_size=No
     assert focal_law.lookup_times_rx.shape == (numpoints, numelements)
     assert focal_law.amplitudes_tx.shape == (numpoints, numelements)
     assert focal_law.amplitudes_rx.shape == (numpoints, numelements)
-    assert focal_law.scanline_weights.shape == (numscanlines,)
+
     assert frame.tx.shape == (numscanlines,)
     assert frame.rx.shape == (numscanlines,)
 
@@ -53,35 +53,40 @@ def delay_and_sum(frame, focal_law, fillvalue=np.nan, result=None, block_size=No
     if numthreads is None:
         numthreads = s.NUMTHREADS
 
+    dt=frame.time.step
+    t0=frame.time.start
+    invdt=(1.0/dt)
+    t0forRounding=(t0-0.5/invdt)
+
     futures = []
-    if interpolate_position == 0:
+    if interpolate_position == 'nearest':
         #Nearest Match
         with ThreadPoolExecutor(max_workers=numthreads) as executor:
             for chunk in chunk_array((numpoints, ...), block_size):
                 futures.append(executor.submit(
                     _delay_and_sum_amplitudes_nearest,
-                    frame.scanlines, frame.tx, frame.rx,
+                    scanlines_weighted, frame.tx, frame.rx,
                     focal_law.lookup_times_tx[chunk],
                     focal_law.lookup_times_rx[chunk],
                     focal_law.amplitudes_tx[chunk],
                     focal_law.amplitudes_rx[chunk],
-                    focal_law.scanline_weights,
-                    frame.time.step, frame.time.start, fillvalue,
+                    s.FLOAT(invdt), s.FLOAT(t0forRounding), fillvalue,
                     result[chunk]))
-    elif interpolate_position == 1:
+    elif interpolate_position == 'linear':
         #Linear Interpolation
         with ThreadPoolExecutor(max_workers=numthreads) as executor:
             for chunk in chunk_array((numpoints, ...), block_size):
                 futures.append(executor.submit(
                     _delay_and_sum_amplitudes_linear,
-                    frame.scanlines, frame.tx, frame.rx,
+                    scanlines_weighted, frame.tx, frame.rx,
                     focal_law.lookup_times_tx[chunk],
                     focal_law.lookup_times_rx[chunk],
                     focal_law.amplitudes_tx[chunk],
                     focal_law.amplitudes_rx[chunk],
-                    focal_law.scanline_weights,
                     frame.time.step, frame.time.start, fillvalue,
                     result[chunk]))
+    else:
+        raise NotImplementedError
     # Raise exceptions that happened, if any:
     for future in futures:
         future.result()
@@ -90,24 +95,22 @@ def delay_and_sum(frame, focal_law, fillvalue=np.nan, result=None, block_size=No
 
 
 @numba.jit(nopython=True, nogil=True)
-def _delay_and_sum_amplitudes_nearest(scanlines, tx, rx, lookup_times_tx, lookup_times_rx, amplitudes_tx, amplitudes_rx,
-                              scanline_weights, dt, t0, fillvalue, result):
+def _delay_and_sum_amplitudes_nearest(scanlines_weighted, tx, rx, lookup_times_tx, lookup_times_rx, amplitudes_tx, amplitudes_rx,invdt, t0forRounding, fillvalue, result):
     """
     (CPU Parallel) Delay and Sum Algorithm, using nearest time point match     
     
     Parameters
     ----------
-    scanlines : ndarray [numscanlines x numsamples]
+    scanlines_weighted : ndarray [numscanlines x numsamples]
+        Weighted/scaled scanlines according to HMC or FMC. Weighting: In HMC, where we want a coefficient 2 when tx=rx, and 1 otherwise., FMC = 1
     lookup_times_tx : ndarray [numpoints x numelements]
         Corresponds to the time of flight between the transmitters and the grid points.
-        Values: integers in [0 and numsamples[
+        Values: np.float32 or np.float64
     lookup_times_rx : ndarray [numpoints x numelements]
         Corresponds to the time of flight between the grid points and the receivers.
-        Values: integers in [0 and numsamples[
+        Values: np.float32 or np.float64
     amplitudes_tx : ndarray [numpoints x numelements]
     amplitudes_rx : ndarray [numpoints x numelements]
-    scanline_weights : ndarray [numscanlines]
-        Allow to scale specific scanlines. Useful for HMC, where we want a coefficient 2 when tx=rx, and 1 otherwise.
     result : ndarray [numpoints]
         Result.
     tx, rx : ndarray [numscanlines]
@@ -118,32 +121,32 @@ def _delay_and_sum_amplitudes_nearest(scanlines, tx, rx, lookup_times_tx, lookup
     -------
     None
     """
-    numscanlines, numsamples = scanlines.shape
+    numscanlines, numsamples = scanlines_weighted.shape
     numpoints, numelements = lookup_times_tx.shape
-
+    
+    
     for point in range(numpoints):
         if np.isnan(result[point]):
             continue
 
         for scan in range(numscanlines):
-            lookup_time = lookup_times_tx[point, tx[scan]] + lookup_times_rx[point, rx[scan]]
-            lookup_index = round((lookup_time - t0) / dt)
+            lookup_time = (lookup_times_tx[point, tx[scan]] + lookup_times_rx[point, rx[scan]] - t0forRounding) * invdt
+            lookup_index = int(lookup_time)
 
             if lookup_index < 0 or lookup_index >= numsamples:
                 result[point] += fillvalue
             else:
-                result[point] += scanline_weights[scan] * amplitudes_tx[point, tx[scan]] * amplitudes_rx[point, rx[scan]] \
-                                 * scanlines[scan, lookup_index]
+                result[point] += amplitudes_tx[point, tx[scan]] * amplitudes_rx[point, rx[scan]] * scanlines_weighted[scan, lookup_index]
 
 @numba.jit(nopython=True, nogil=True)
-def _delay_and_sum_amplitudes_linear(scanlines, tx, rx, lookup_times_tx, lookup_times_rx, amplitudes_tx, amplitudes_rx,
-                              scanline_weights, dt, t0, fillvalue, result):
+def _delay_and_sum_amplitudes_linear(scanlines_weighted, tx, rx, lookup_times_tx, lookup_times_rx, amplitudes_tx, amplitudes_rx, dt, t0, fillvalue, result):
     """
     (CPU Parallel) Delay and Sum Algorithm, using linear interpolation for time point     
     
     Parameters
     ----------
-    scanlines : ndarray [numscanlines x numsamples]
+    scanlines_weighted : ndarray [numscanlines x numsamples]
+        Weighted/scaled scanlines according to HMC or FMC. Weighting: In HMC, where we want a coefficient 2 when tx=rx, and 1 otherwise., FMC = 1
     lookup_times_tx : ndarray [numpoints x numelements]
         Corresponds to the time of flight between the transmitters and the grid points.
         Values: integers in [0 and numsamples[
@@ -152,8 +155,6 @@ def _delay_and_sum_amplitudes_linear(scanlines, tx, rx, lookup_times_tx, lookup_
         Values: integers in [0 and numsamples[
     amplitudes_tx : ndarray [numpoints x numelements]
     amplitudes_rx : ndarray [numpoints x numelements]
-    scanline_weights : ndarray [numscanlines]
-        Allow to scale specific scanlines. Useful for HMC, where we want a coefficient 2 when tx=rx, and 1 otherwise.
     result : ndarray [numpoints]
         Result.
     tx, rx : ndarray [numscanlines]
@@ -164,7 +165,7 @@ def _delay_and_sum_amplitudes_linear(scanlines, tx, rx, lookup_times_tx, lookup_
     -------
     None
     """
-    numscanlines, numsamples = scanlines.shape
+    numscanlines, numsamples = scanlines_weighted.shape
     numpoints, numelements = lookup_times_tx.shape
 
     for point in range(numpoints):
@@ -182,10 +183,10 @@ def _delay_and_sum_amplitudes_linear(scanlines, tx, rx, lookup_times_tx, lookup_
             if lookup_index < 0 or lookup_index1 >= numsamples:
                 result[point] += fillvalue
             else:
-                lscanVal=scanlines[scan, lookup_index]
-                lscanVal1=scanlines[scan, lookup_index1]
+                lscanVal=scanlines_weighted[scan, lookup_index]
+                lscanVal1=scanlines_weighted[scan, lookup_index1]
                 lscanUseVal=lscanVal+frac1*(lscanVal1-lscanVal)
-                result[point] += scanline_weights[scan] * amplitudes_tx[point, tx[scan]] * amplitudes_rx[point, rx[scan]] \
+                result[point] += amplitudes_tx[point, tx[scan]] * amplitudes_rx[point, rx[scan]] \
                                  * lscanUseVal
 
 

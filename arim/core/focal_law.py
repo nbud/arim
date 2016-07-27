@@ -6,12 +6,11 @@ from ..enums import CaptureMethod
 
 __all__ = ['FocalLaw']
 
-FocalLaw = namedtuple('FocalLaw', ['lookup_times_tx', 'lookup_times_rx', 'amplitudes_tx', 'amplitudes_rx', 'scanline_weights'])
+FocalLaw = namedtuple('FocalLaw', ['lookup_times_tx', 'lookup_times_rx', 'amplitudes_tx', 'amplitudes_rx'])
 
 
 # class FocalLaw:
-#     def __init__(self, lookup_times_tx, lookup_times_rx, amplitudes, scanline_weights):
+#     def __init__(self, lookup_times_tx, lookup_times_rx, amplitudes):
 #         self.lookup_times_tx = lookup_times_tx
 #         self.lookup_times_rx = lookup_times_rx
 #         self.amplitudes = amplitudes
-#         self.scanline_weights = scanline_weights
